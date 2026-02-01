@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Kid Color Book</title>
     <style>
         /* --- CSS STYLES --- */
@@ -23,6 +23,7 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            overflow: hidden; /* Prevent body scroll, handle in app */
         }
 
         /* Header & Footer */
@@ -32,6 +33,7 @@
             text-align: center;
             padding: 1rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10;
         }
 
         header h1 { margin: 0; font-size: 2.5rem; text-shadow: 2px 2px 0px rgba(0,0,0,0.2); }
@@ -71,6 +73,7 @@
             margin: 0 auto;
             width: 100%;
             box-sizing: border-box;
+            overflow-y: auto;
         }
 
         /* Grids */
@@ -121,7 +124,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.9); /* Darker bg for focus */
             z-index: 1000;
             justify-content: center;
             align-items: center;
@@ -129,24 +132,25 @@
 
         .editor-container {
             background: white;
-            padding: 10px;
+            padding: 5px;
             border-radius: 10px;
             display: flex;
             flex-direction: column;
-            width: 95%;
-            height: 95%;
+            width: 98%;
+            height: 98%;
             box-sizing: border-box;
         }
 
         .editor-toolbar {
             display: flex;
-            gap: 10px;
-            padding: 10px;
+            gap: 5px;
+            padding: 5px;
             background: #f0f0f0;
             border-radius: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             align-items: center;
             flex-wrap: wrap;
+            justify-content: space-between;
         }
 
         /* Canvas Wrapper for Zoom/Scroll */
@@ -161,45 +165,44 @@
             justify-content: center;
             align-items: center;
             position: relative;
+            touch-action: none; /* Crucial for custom gesture handling */
         }
 
         canvas {
             background: white;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
             cursor: crosshair;
-            touch-action: none;
-            transform-origin: top left; 
+            transform-origin: center center; 
             display: block;
         }
 
         .tool-group {
             display: flex;
             align-items: center;
-            gap: 5px;
-            margin-right: 15px;
-            padding-right: 15px;
+            gap: 2px;
+            padding-right: 5px;
             border-right: 1px solid #ddd;
         }
         
         .tool-btn {
             background: white;
-            border: 2px solid #ccc;
-            padding: 5px 10px;
+            border: 1px solid #ccc;
+            padding: 5px 8px;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
         }
         
         .tool-btn.active {
             background: var(--accent-color);
             border-color: #e6c200;
+            transform: scale(1.1);
         }
 
-        input[type="color"] { border: none; width: 40px; height: 40px; cursor: pointer; background: none; }
-        .brush-size { width: 100px; }
-        .action-btn { padding: 8px 15px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+        input[type="color"] { border: none; width: 35px; height: 35px; cursor: pointer; background: none; }
+        .brush-size { width: 80px; }
+        .action-btn { padding: 8px 10px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; font-size: 0.8rem; }
         .btn-save { background-color: #27ae60; }
-        .btn-clear { background-color: #e74c3c; }
         .btn-close { background-color: #95a5a6; }
         .btn-undo { background-color: #f39c12; }
 
@@ -226,12 +229,6 @@
         .item-list img { width: 50px; height: 50px; object-fit: cover; border-radius: 5px; margin-right: 10px; }
         .btn-delete { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
 
-        /* Responsive */
-        @media (max-width: 800px) {
-            .tool-group { margin-right: 5px; padding-right: 5px; border: none;}
-            .editor-toolbar { justify-content: space-between; gap: 5px;}
-            .brush-size { width: 60px; }
-        }
     </style>
 </head>
 <body>
@@ -241,8 +238,8 @@
     </header>
 
     <div id="nav-bar">
-        <button class="back-btn" onclick="goHome()">⬅ Back to Categories</button>
-        <span id="current-category-title" style="margin-left: 15px; font-weight: bold; font-size: 1.2rem;"></span>
+        <button class="back-btn" onclick="goHome()">⬅ Categories</button>
+        <span id="current-category-title" style="margin-left: 10px; font-weight: bold;"></span>
     </div>
 
     <main id="app-content">
@@ -259,27 +256,20 @@
                 <div class="tool-group">
                     <button class="tool-btn active" id="btnBrush" onclick="setTool('brush')" title="Brush">🖌️</button>
                     <button class="tool-btn" id="btnFill" onclick="setTool('fill')" title="Fill">🪣</button>
+                    <button class="action-btn btn-undo" onclick="undo()" title="Undo">↩️</button>
                 </div>
 
                 <div class="tool-group">
-                    <button class="action-btn btn-undo" onclick="undo()" title="Undo">↩️ Undo</button>
-                </div>
-
-                <div class="tool-group">
-                    <button class="tool-btn" onclick="changeZoom(0.1)" title="Zoom In">🔍+</button>
-                    <button class="tool-btn" onclick="changeZoom(-0.1)" title="Zoom Out">🔍-</button>
+                    <button class="tool-btn" onclick="changeZoom(0.1)">➕</button>
+                    <button class="tool-btn" onclick="changeZoom(-0.1)">➖</button>
                 </div>
 
                 <div class="tool-group">
                     <input type="color" id="colorPicker" value="#FF0000">
-                </div>
-                
-                <div class="tool-group" id="brushSizeGroup">
-                    <label>Size:</label>
                     <input type="range" id="brushSize" class="brush-size" min="1" max="50" value="5">
                 </div>
 
-                <div class="tool-group" style="margin-left: auto; border:none;">
+                <div class="tool-group" style="margin-left: auto; border:none; padding-right:0;">
                     <button class="action-btn btn-save" onclick="saveDrawing()">💾</button>
                     <button class="action-btn btn-close" onclick="closeEditor()">❌</button>
                 </div>
@@ -381,7 +371,7 @@
         let isDrawing = false;
         let currentImageSrc = '';
         
-        // --- NEW STATE VARS ---
+        // --- STATE VARS ---
         let undoStack = [];
         const MAX_UNDO = 10; 
         let zoomLevel = 1.0;
@@ -458,7 +448,7 @@
         function resizeCanvas() {
             // Match canvas size to the wrapper size initially
             const rect = wrapper.getBoundingClientRect();
-            // We use a fixed high res or match container. Matching container is safer for coordinates.
+            // We give it a specific size to prevent blur
             canvas.width = rect.width;
             canvas.height = rect.height;
         }
@@ -491,9 +481,6 @@
 
         function undo() {
             if (undoStack.length > 0) {
-                // If we have history, restore the previous one. 
-                // Note: Realistically we need to pop current, then peek previous.
-                // Simple version: Pop and restore.
                 const restoreState = undoStack.pop();
                 ctx.putImageData(restoreState, 0, 0);
             }
@@ -503,20 +490,20 @@
         function changeZoom(delta) {
             zoomLevel += delta;
             if(zoomLevel < 0.5) zoomLevel = 0.5;
-            if(zoomLevel > 3.0) zoomLevel = 3.0;
+            if(zoomLevel > 4.0) zoomLevel = 4.0;
             applyZoom();
         }
 
         function applyZoom() {
             canvas.style.transform = `scale(${zoomLevel})`;
-            // If zoomed in, the wrapper scrollbars handle navigation.
         }
 
         function setTool(tool) {
             currentTool = tool;
             document.getElementById('btnBrush').classList.toggle('active', tool === 'brush');
             document.getElementById('btnFill').classList.toggle('active', tool === 'fill');
-            document.getElementById('brushSizeGroup').style.display = tool === 'brush' ? 'flex' : 'none';
+            // Hide brush size if filling
+            document.getElementById('brushSize').style.display = tool === 'brush' ? 'block' : 'none';
         }
 
         function saveDrawing() {
@@ -526,7 +513,7 @@
             link.click();
         }
 
-        // --- SMART FILL ALGORITHM (With Tolerance) ---
+        // --- SMART FILL ALGORITHM ---
         function hexToRgb(hex) {
             const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
             return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
@@ -555,7 +542,6 @@
                 const r = data[pos];
                 const g = data[pos+1];
                 const b = data[pos+2];
-                // Check if pixel is close to start color (e.g., white or light gray)
                 const diff = Math.abs(r - startR) + Math.abs(g - startG) + Math.abs(b - startB);
                 return diff < TOLERANCE; 
             }
@@ -589,16 +575,29 @@
             ctx.putImageData(imageData, 0, 0);
         }
 
+        // --- GESTURE & DRAWING ENGINE ---
         function setupCanvasEvents() {
             const colorPicker = document.getElementById('colorPicker');
             const brushSize = document.getElementById('brushSize');
 
-            // Calculate Mouse/Touch pos accounting for Zoom
-            function getPos(e) {
-                const rect = canvas.getBoundingClientRect(); // Visual dimensions
-                const clientX = e.clientX || e.touches[0].clientX;
-                const clientY = e.clientY || e.touches[0].clientY;
-                
+            // --- ZOOM VARIABLES ---
+            let startDist = 0;
+            let startZoom = 1;
+            
+            // --- PAN VARIABLES ---
+            let startPanX = 0;
+            let startPanY = 0;
+            let startScrollLeft = 0;
+            let startScrollTop = 0;
+
+            // Math Helper for Pinch Distance
+            function getDist(t1, t2) {
+                return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+            }
+
+            // Coordinate Mapper (Visual -> Canvas)
+            function getPos(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect(); 
                 // Scale mapping
                 const scaleX = canvas.width / rect.width;
                 const scaleY = canvas.height / rect.height;
@@ -609,14 +608,13 @@
                 };
             }
 
-            // MOUSE
+            // ---------------- MOUSE EVENTS (Desktop) ----------------
             canvas.addEventListener('mousedown', (e) => {
-                if(currentTool !== 'fill') saveState(); 
-
-                const pos = getPos(e);
+                const pos = getPos(e.clientX, e.clientY);
                 if(currentTool === 'fill') {
                     floodFill(pos.x, pos.y, hexToRgb(colorPicker.value));
                 } else {
+                    saveState();
                     isDrawing = true;
                     ctx.beginPath();
                     ctx.moveTo(pos.x, pos.y);
@@ -625,7 +623,7 @@
 
             canvas.addEventListener('mousemove', (e) => {
                 if (!isDrawing || currentTool === 'fill') return;
-                const pos = getPos(e);
+                const pos = getPos(e.clientX, e.clientY);
                 ctx.lineWidth = brushSize.value;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -634,39 +632,81 @@
                 ctx.stroke();
             });
 
-            canvas.addEventListener('mouseup', () => {
+            canvas.addEventListener('mouseup', () => { if(isDrawing) { isDrawing = false; ctx.beginPath(); } });
+            
+            // ---------------- TOUCH EVENTS (Mobile/Tablet) ----------------
+            wrapper.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); // Stop default scroll/zoom
+
+                // Case 1: Pinch Zoom / Pan (2 Fingers)
+                if (e.touches.length === 2) {
+                    isDrawing = false; // Stop drawing if pinch starts
+                    
+                    // Init Zoom
+                    startDist = getDist(e.touches[0], e.touches[1]);
+                    startZoom = zoomLevel;
+
+                    // Init Pan
+                    startPanX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    startPanY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    startScrollLeft = wrapper.scrollLeft;
+                    startScrollTop = wrapper.scrollTop;
+                }
+                // Case 2: Draw / Fill (1 Finger)
+                else if (e.touches.length === 1) {
+                    const pos = getPos(e.touches[0].clientX, e.touches[0].clientY);
+                    
+                    if(currentTool === 'fill') {
+                        floodFill(pos.x, pos.y, hexToRgb(colorPicker.value));
+                    } else {
+                        saveState();
+                        isDrawing = true;
+                        ctx.beginPath();
+                        ctx.moveTo(pos.x, pos.y);
+                    }
+                }
+            }, { passive: false });
+
+            wrapper.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+
+                // Case 1: Pinch Zoom / Pan (2 Fingers)
+                if (e.touches.length === 2) {
+                    // 1. ZOOM Logic
+                    const newDist = getDist(e.touches[0], e.touches[1]);
+                    const scale = newDist / startDist;
+                    zoomLevel = startZoom * scale;
+                    // Clamp Zoom
+                    if(zoomLevel < 0.5) zoomLevel = 0.5;
+                    if(zoomLevel > 4.0) zoomLevel = 4.0;
+                    applyZoom();
+
+                    // 2. PAN Logic (Move Wrapper Scroll)
+                    const currPanX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const currPanY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    
+                    // We move scroll opposite to finger movement
+                    const deltaX = startPanX - currPanX;
+                    const deltaY = startPanY - currPanY;
+
+                    wrapper.scrollLeft = startScrollLeft + deltaX;
+                    wrapper.scrollTop = startScrollTop + deltaY;
+                }
+                // Case 2: Draw (1 Finger)
+                else if (e.touches.length === 1 && isDrawing && currentTool === 'brush') {
+                    const pos = getPos(e.touches[0].clientX, e.touches[0].clientY);
+                    ctx.lineWidth = brushSize.value;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeStyle = colorPicker.value;
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                }
+            }, { passive: false });
+
+            wrapper.addEventListener('touchend', (e) => {
                 if(isDrawing) { isDrawing = false; ctx.beginPath(); }
             });
-            
-            // TOUCH
-            canvas.addEventListener('touchstart', (e) => { 
-                if(e.touches.length > 1) return; // Ignore pinch
-                e.preventDefault(); 
-                
-                if(currentTool !== 'fill') saveState(); 
-
-                const pos = getPos(e);
-                if(currentTool === 'fill') {
-                    floodFill(pos.x, pos.y, hexToRgb(colorPicker.value));
-                } else {
-                    isDrawing = true;
-                    ctx.beginPath();
-                    ctx.moveTo(pos.x, pos.y);
-                }
-            });
-            canvas.addEventListener('touchmove', (e) => {
-                if(e.touches.length > 1) return;
-                if (!isDrawing || currentTool === 'fill') return;
-                e.preventDefault();
-                const pos = getPos(e);
-                ctx.lineWidth = brushSize.value;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = colorPicker.value;
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
-            });
-            canvas.addEventListener('touchend', () => isDrawing = false);
         }
 
         // --- ADMIN ---
