@@ -149,7 +149,7 @@
             flex-wrap: wrap;
         }
 
-        /* New Canvas Wrapper for Zoom/Scroll */
+        /* Canvas Wrapper for Zoom/Scroll */
         .canvas-wrapper {
             flex: 1;
             width: 100%;
@@ -158,8 +158,9 @@
             background-color: #ccc;
             border: 2px dashed #999;
             display: flex;
-            justify-content: center; /* Center initially */
+            justify-content: center;
             align-items: center;
+            position: relative;
         }
 
         canvas {
@@ -167,8 +168,8 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
             cursor: crosshair;
             touch-action: none;
-            /* Transform origin for zooming */
             transform-origin: top left; 
+            display: block;
         }
 
         .tool-group {
@@ -225,14 +226,12 @@
         .item-list img { width: 50px; height: 50px; object-fit: cover; border-radius: 5px; margin-right: 10px; }
         .btn-delete { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
 
-        /* Responsive Fixes */
+        /* Responsive */
         @media (max-width: 800px) {
             .tool-group { margin-right: 5px; padding-right: 5px; border: none;}
             .editor-toolbar { justify-content: space-between; gap: 5px;}
             .brush-size { width: 60px; }
-            canvas { transform-origin: center center; } 
         }
-
     </style>
 </head>
 <body>
@@ -341,4 +340,392 @@
             { id: 'princess', name: 'Princess', icon: '👑' },
             { id: 'space', name: 'Space', icon: '🚀' },
             { id: 'nature', name: 'Nature', icon: '🌳' },
-            {
+            { id: 'dinosaurs', name: 'Dinosaurs', icon: '🦖' },
+            { id: 'robots', name: 'Robots', icon: '🤖' },
+            { id: 'food', name: 'Yummy Food', icon: '🍔' },
+            { id: 'ocean', name: 'Ocean Life', icon: '🐬' },
+            { id: 'superheroes', name: 'Heroes', icon: '🦸' }
+        ];
+
+        // Placeholder Image
+        const defaultImg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNDAwIDQwMCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSIyMDAiIGN5PSIyMDAiIHI9IjEwMCIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSI1IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTE1MCAxNTAgTDI1MCAxNTAgTDIwMCAyNTAgWiIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSI1IiBmaWxsPSJub25lIi8+PC9zdmc+";
+
+        // LocalStorage Init
+        let contentData = JSON.parse(localStorage.getItem('kidColorBookData')) || {};
+        if (Object.keys(contentData).length === 0) {
+            categories.forEach(cat => {
+                contentData[cat.id] = [];
+                for (let i = 1; i <= 10; i++) {
+                    contentData[cat.id].push({
+                        id: Date.now() + Math.random(),
+                        title: `${cat.name} ${i}`,
+                        src: defaultImg
+                    });
+                }
+            });
+            saveData();
+        }
+
+        function saveData() { localStorage.setItem('kidColorBookData', JSON.stringify(contentData)); }
+
+        // --- STATE ---
+        const main = document.getElementById('app-content');
+        const navBar = document.getElementById('nav-bar');
+        const catTitle = document.getElementById('current-category-title');
+        let currentTool = 'brush'; 
+        
+        // --- CANVAS ---
+        const canvas = document.getElementById('drawingCanvas');
+        const wrapper = document.getElementById('canvasWrapper');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        let isDrawing = false;
+        let currentImageSrc = '';
+        
+        // --- NEW STATE VARS ---
+        let undoStack = [];
+        const MAX_UNDO = 10; 
+        let zoomLevel = 1.0;
+
+        // --- INIT ---
+        window.onload = () => {
+            renderCategories();
+            setupCanvasEvents();
+            setupAdmin();
+        };
+
+        // --- RENDERERS ---
+        function renderCategories() {
+            navBar.style.display = 'none';
+            main.innerHTML = `<div class="grid" id="cat-grid"></div>`;
+            const grid = document.getElementById('cat-grid');
+
+            categories.forEach(cat => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.onclick = () => renderDrawingList(cat.id);
+                card.innerHTML = `
+                    <div class="card-img" style="display:flex;align-items:center;justify-content:center;font-size:4rem;">${cat.icon}</div>
+                    <div class="card-title">${cat.name}</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderDrawingList(catId) {
+            const category = categories.find(c => c.id === catId);
+            navBar.style.display = 'block';
+            catTitle.textContent = category.name;
+            
+            main.innerHTML = `<div class="grid" id="draw-grid"></div>`;
+            const grid = document.getElementById('draw-grid');
+
+            if(contentData[catId].length === 0) {
+                grid.innerHTML = "<p>No drawings here yet! Use Admin panel to add some.</p>";
+                return;
+            }
+
+            contentData[catId].forEach(drawing => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.onclick = () => openEditor(drawing.src);
+                card.innerHTML = `
+                    <img src="${drawing.src}" class="card-img" alt="${drawing.title}">
+                    <div class="card-title">${drawing.title}</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function goHome() { renderCategories(); }
+
+        // --- EDITOR & TOOLS ---
+        function openEditor(imageSrc) {
+            document.getElementById('editor-modal').style.display = 'flex';
+            currentImageSrc = imageSrc;
+            
+            // Reset state
+            undoStack = [];
+            zoomLevel = 1.0;
+            applyZoom();
+            setTool('brush');
+            
+            resizeCanvas();
+            loadCanvasImage(imageSrc);
+        }
+
+        function closeEditor() { document.getElementById('editor-modal').style.display = 'none'; }
+
+        function resizeCanvas() {
+            // Match canvas size to the wrapper size initially
+            const rect = wrapper.getBoundingClientRect();
+            // We use a fixed high res or match container. Matching container is safer for coordinates.
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        function loadCanvasImage(src) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; 
+            img.onload = () => {
+                const hRatio = canvas.width / img.width;
+                const vRatio = canvas.height / img.height;
+                const ratio  = Math.min(hRatio, vRatio) * 0.9;
+                const centerShift_x = (canvas.width - img.width*ratio) / 2;
+                const centerShift_y = (canvas.height - img.height*ratio) / 2;  
+                ctx.drawImage(img, 0,0, img.width, img.height, centerShift_x, centerShift_y, img.width*ratio, img.height*ratio);
+                
+                saveState(); // Init undo stack
+            }
+            img.src = src;
+        }
+
+        // --- UNDO LOGIC ---
+        function saveState() {
+            if (undoStack.length >= MAX_UNDO) undoStack.shift();
+            undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        }
+
+        function undo() {
+            if (undoStack.length > 0) {
+                // If we have history, restore the previous one. 
+                // Note: Realistically we need to pop current, then peek previous.
+                // Simple version: Pop and restore.
+                const restoreState = undoStack.pop();
+                ctx.putImageData(restoreState, 0, 0);
+            }
+        }
+
+        // --- ZOOM LOGIC ---
+        function changeZoom(delta) {
+            zoomLevel += delta;
+            if(zoomLevel < 0.5) zoomLevel = 0.5;
+            if(zoomLevel > 3.0) zoomLevel = 3.0;
+            applyZoom();
+        }
+
+        function applyZoom() {
+            canvas.style.transform = `scale(${zoomLevel})`;
+            // If zoomed in, the wrapper scrollbars handle navigation.
+        }
+
+        function setTool(tool) {
+            currentTool = tool;
+            document.getElementById('btnBrush').classList.toggle('active', tool === 'brush');
+            document.getElementById('btnFill').classList.toggle('active', tool === 'fill');
+            document.getElementById('brushSizeGroup').style.display = tool === 'brush' ? 'flex' : 'none';
+        }
+
+        function saveDrawing() {
+            const link = document.createElement('a');
+            link.download = 'my-art.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // --- SMART FILL ALGORITHM (With Tolerance) ---
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+        }
+
+        function floodFill(x, y, fillColor) {
+            saveState(); // Save before fill for undo
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            const startPos = (y * width + x) * 4;
+            const startR = data[startPos];
+            const startG = data[startPos + 1];
+            const startB = data[startPos + 2];
+            
+            // If clicking on same color, do nothing
+            if (Math.abs(startR - fillColor.r) < 10 && Math.abs(startG - fillColor.g) < 10 && Math.abs(startB - fillColor.b) < 10) return;
+
+            // Tolerance to fix "dots"
+            const TOLERANCE = 80;
+
+            function matchStartColor(pos) {
+                const r = data[pos];
+                const g = data[pos+1];
+                const b = data[pos+2];
+                // Check if pixel is close to start color (e.g., white or light gray)
+                const diff = Math.abs(r - startR) + Math.abs(g - startG) + Math.abs(b - startB);
+                return diff < TOLERANCE; 
+            }
+
+            function colorPixel(pos) {
+                data[pos] = fillColor.r;
+                data[pos+1] = fillColor.g;
+                data[pos+2] = fillColor.b;
+                data[pos+3] = 255; 
+            }
+
+            const stack = [[x, y]];
+
+            while (stack.length) {
+                const [cx, cy] = stack.pop();
+                const pos = (cy * width + cx) * 4;
+
+                if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
+                
+                // If already colored to target, skip
+                if (data[pos] === fillColor.r && data[pos+1] === fillColor.g && data[pos+2] === fillColor.b) continue;
+
+                if (matchStartColor(pos)) {
+                    colorPixel(pos);
+                    stack.push([cx + 1, cy]);
+                    stack.push([cx - 1, cy]);
+                    stack.push([cx, cy + 1]);
+                    stack.push([cx, cy - 1]);
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function setupCanvasEvents() {
+            const colorPicker = document.getElementById('colorPicker');
+            const brushSize = document.getElementById('brushSize');
+
+            // Calculate Mouse/Touch pos accounting for Zoom
+            function getPos(e) {
+                const rect = canvas.getBoundingClientRect(); // Visual dimensions
+                const clientX = e.clientX || e.touches[0].clientX;
+                const clientY = e.clientY || e.touches[0].clientY;
+                
+                // Scale mapping
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+
+                return { 
+                    x: Math.floor((clientX - rect.left) * scaleX), 
+                    y: Math.floor((clientY - rect.top) * scaleY) 
+                };
+            }
+
+            // MOUSE
+            canvas.addEventListener('mousedown', (e) => {
+                if(currentTool !== 'fill') saveState(); 
+
+                const pos = getPos(e);
+                if(currentTool === 'fill') {
+                    floodFill(pos.x, pos.y, hexToRgb(colorPicker.value));
+                } else {
+                    isDrawing = true;
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                }
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDrawing || currentTool === 'fill') return;
+                const pos = getPos(e);
+                ctx.lineWidth = brushSize.value;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = colorPicker.value;
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                if(isDrawing) { isDrawing = false; ctx.beginPath(); }
+            });
+            
+            // TOUCH
+            canvas.addEventListener('touchstart', (e) => { 
+                if(e.touches.length > 1) return; // Ignore pinch
+                e.preventDefault(); 
+                
+                if(currentTool !== 'fill') saveState(); 
+
+                const pos = getPos(e);
+                if(currentTool === 'fill') {
+                    floodFill(pos.x, pos.y, hexToRgb(colorPicker.value));
+                } else {
+                    isDrawing = true;
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                }
+            });
+            canvas.addEventListener('touchmove', (e) => {
+                if(e.touches.length > 1) return;
+                if (!isDrawing || currentTool === 'fill') return;
+                e.preventDefault();
+                const pos = getPos(e);
+                ctx.lineWidth = brushSize.value;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = colorPicker.value;
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            });
+            canvas.addEventListener('touchend', () => isDrawing = false);
+        }
+
+        // --- ADMIN ---
+        function openAdmin() { document.getElementById('admin-modal').style.display = 'flex'; }
+        
+        function checkAdmin() {
+            if (document.getElementById('admin-pass').value === ADMIN_PASS) {
+                document.getElementById('admin-login').style.display = 'none';
+                document.getElementById('admin-dashboard').style.display = 'block';
+                loadAdminList();
+            } else { alert("Incorrect Password!"); }
+        }
+
+        function setupAdmin() {
+            const select = document.getElementById('admin-cat-select');
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.text = cat.name;
+                select.appendChild(option);
+            });
+        }
+
+        function loadAdminList() {
+            const catId = document.getElementById('admin-cat-select').value;
+            const list = document.getElementById('admin-list');
+            list.innerHTML = '';
+            contentData[catId].forEach((item, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div style="display:flex;align-items:center;">
+                        <img src="${item.src}"><span>${item.title}</span>
+                    </div>
+                    <button class="btn-delete" onclick="deleteDrawing('${catId}', ${index})">Delete</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function addDrawing() {
+            const catId = document.getElementById('admin-cat-select').value;
+            const url = document.getElementById('new-img-url').value;
+            const title = document.getElementById('new-img-title').value;
+            if(!url || !title) { alert("Please fill both fields"); return; }
+            contentData[catId].push({ id: Date.now(), title: title, src: url });
+            saveData();
+            document.getElementById('new-img-url').value = '';
+            document.getElementById('new-img-title').value = '';
+            loadAdminList();
+            alert("Drawing Added!");
+        }
+
+        function deleteDrawing(catId, index) {
+            if(confirm("Delete this drawing?")) {
+                contentData[catId].splice(index, 1);
+                saveData();
+                loadAdminList();
+            }
+        }
+    </script>
+</body>
+</html>
